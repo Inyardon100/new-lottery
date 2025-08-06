@@ -190,7 +190,7 @@ def main():
                 st.subheader("새 추첨 만들기")
                 title = st.text_input("제목", key="new_title")
                 num_winners = st.number_input("당첨 인원", min_value=1, value=1, key="new_num_winners")
-                draw_type = st.radio("방식", ["즉시", "예약"], key="new_draw_type")
+                draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type"), key="new_draw_type")
 
                 if draw_type == "예약":
                     date = st.date_input("날짜", value=now_kst().date(), key="new_draw_date")
@@ -251,9 +251,13 @@ def main():
                     if st.button("삭제", key="delete_button"):
                         st.session_state.delete_confirm_id = lid
                     if st.session_state.delete_confirm_id==lid:
-                        st.warning("정말 삭제하시겠습니까?" )
+                        st.warning("정말 삭제하시겠습니까?")
                         if st.button("예, 삭제합니다", key="confirm_delete_button"):
                             c = conn.cursor()
+                            # 자식 테이블 데이터 먼저 삭제 (기존 외래키 제약이 작동하지 않을 수 있음)
+                            c.execute("DELETE FROM lottery_logs WHERE lottery_id=?", (lid,))
+                            c.execute("DELETE FROM winners WHERE lottery_id=?", (lid,))
+                            c.execute("DELETE FROM participants WHERE lottery_id=?", (lid,))
                             c.execute("DELETE FROM lotteries WHERE id=?", (lid,))
                             conn.commit()
                             st.success("삭제 완료")
