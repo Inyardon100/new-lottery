@@ -113,7 +113,7 @@ def main():
                 
                 if isinstance(raw_draw_time, str): draw_time = datetime.datetime.fromisoformat(raw_draw_time)
                 else: draw_time = raw_draw_time
-                if draw_time.tzinfo is None: draw_time = draw_time.replace(tzinfo=KST)
+                if hasattr(draw_time, 'tzinfo') and draw_time.tzinfo is None: draw_time = draw_time.replace(tzinfo=KST)
 
                 with st.container(border=True):
                     st.header(f"✨ {title}")
@@ -136,7 +136,7 @@ def main():
                     for _, task in redraw_tasks.iterrows():
                         rt = task['execution_time']
                         if isinstance(rt, str): rt = datetime.datetime.fromisoformat(rt)
-                        if rt.tzinfo is None: rt = rt.replace(tzinfo=KST)
+                        if hasattr(rt, 'tzinfo') and rt.tzinfo is None: rt = rt.replace(tzinfo=KST)
                         st.info(f"**재추첨 예약됨:** {rt.strftime('%Y-%m-%d %H:%M:%S')} ({task['num_winners']}명)")
                     
                     tab1, tab2 = st.tabs(["참가자 명단", "📜 추첨 로그"])
@@ -184,7 +184,9 @@ def main():
                 draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type", horizontal=True)
                 if draw_type == "예약 추첨":
                     date = st.date_input("날짜", value=now_kst().date(), key="new_draw_date")
-                    tm = st.time_input("시간 (HH:MM)", value=(now_kst() + datetime.timedelta(minutes=5)).time(), step=datetime.timedelta(minutes=1), key="new_draw_time")
+                    # 안정적인 시간 입력을 위해 세션 상태 사용
+                    default_tm = st.session_state.get('new_draw_time', (now_kst() + datetime.timedelta(minutes=5)).time())
+                    tm = st.time_input("시간 (HH:MM)", value=default_tm, key="new_draw_time", step=datetime.timedelta(minutes=1))
                     draw_time = datetime.datetime.combine(date, tm, tzinfo=KST)
                 else: draw_time = now_kst()
                 participants_txt = st.text_area("참가자 명단 (한 줄에 한 명)", key="new_participants", height=150)
@@ -220,7 +222,9 @@ def main():
                             redraw_time = now_kst()
                             if redraw_type == "예약 추첨":
                                 redraw_date = st.date_input("재추첨 날짜", value=now_kst().date(), key=f"redraw_date_{lid}")
-                                redraw_tm = st.time_input("재추첨 시간", value=(now_kst() + datetime.timedelta(minutes=5)).time(), step=datetime.timedelta(minutes=1), key=f"redraw_time_{lid}")
+                                # 안정적인 시간 입력을 위해 세션 상태 사용
+                                redraw_tm_default = st.session_state.get(f'redraw_time_{lid}', (now_kst() + datetime.timedelta(minutes=5)).time())
+                                redraw_tm = st.time_input("재추첨 시간", value=redraw_tm_default, key=f"redraw_time_{lid}", step=datetime.timedelta(minutes=1))
                                 redraw_time = datetime.datetime.combine(redraw_date, redraw_tm, tzinfo=KST)
                             chosen = st.multiselect("재추첨 후보자", cand, default=cand, key=f"redraw_cand_{lid}")
                             num_r = st.number_input("추첨 인원 수", 1, len(chosen) if chosen else 1, 1, key=f"redraw_num_{lid}")
