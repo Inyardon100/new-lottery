@@ -138,14 +138,13 @@ def main():
                 st.info("아직 생성된 추첨이 없습니다.")
             else:
                 for _, row in df_lot.iterrows():
-                    list_col1, list_col2, list_col3 = st.columns([5, 2.2, 1.8]) # 버튼과 상태 너비 미세 조정
+                    # 3단 컬럼을 2단으로 변경하여 모바일 높이 문제 해결
+                    list_col1, list_col2 = st.columns([3, 1])
                     status_emoji = "🟢 진행중" if row['status'] == 'scheduled' else "🏁 완료"
                     with list_col1:
-                        # H4 헤더 대신 굵은 글씨로 변경하여 높이 감소
-                        st.write(f"**{row['title']}**")
+                        # H4 헤더 대신 굵은 글씨와 상태를 한 줄에 표시
+                        st.markdown(f"**{row['title']}** &nbsp; {status_emoji}")
                     with list_col2:
-                        st.markdown(f"{status_emoji}")
-                    with list_col3:
                         if st.button("상세보기", key=f"detail_btn_{row['id']}"):
                             st.session_state.view_mode = 'detail'
                             st.session_state.selected_lottery_id = int(row['id'])
