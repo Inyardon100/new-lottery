@@ -200,7 +200,14 @@ def main():
 
                 if draw_type == "예약 추첨":
                     date = st.date_input("추첨 날짜 (YYYY-MM-DD 형식으로 선택)", value=now_kst().date(), key="new_draw_date")
-                    tm = st.time_input("추첨 시간 (HH:MM)", value=now_kst().time(), step=60, key="new_draw_time")
+                    # 시간 선택 값이 변경되지 않는 문제 해결을 위해 세션 상태에 저장된 값 사용
+                    default_tm = st.session_state.get('new_draw_time', now_kst().time())
+                    tm = st.time_input(
+                        "추첨 시간 (HH:MM)",
+                        value=default_tm,
+                        key="new_draw_time",
+                        step=60
+                    )
                     draw_time = datetime.datetime.combine(date, tm, tzinfo=KST)
                 else:
                     draw_time = now_kst()
