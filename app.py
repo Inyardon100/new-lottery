@@ -6,7 +6,7 @@ import datetime
 import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. 설정 및 데이터베이스 초기화 (변경 없음) ---
+# --- 1. 설정 및 데이터베이스 초기화 ---
 
 ADMIN_PASSWORD = "10293847"
 
@@ -59,7 +59,7 @@ def add_log(conn, lottery_id, message):
     c.execute("INSERT INTO lottery_logs (lottery_id, log_message) VALUES (?, ?)", (lottery_id, message))
     conn.commit()
 
-# --- 2. 자동/수동 추첨 로직 (변경 없음) ---
+# --- 2. 자동/수동 추첨 로직 ---
 
 def run_draw(conn, lottery_id, num_to_draw, candidates):
     actual_num_winners = min(num_to_draw, len(candidates))
@@ -97,10 +97,10 @@ def check_and_run_scheduled_draws(conn):
             if winners:
                 st.session_state[f'celebrated_{lottery_id}'] = True
 
-# --- 3. Streamlit UI 구성 (관리자 메뉴 부분 수정) ---
+# --- 3. Streamlit UI 구성 ---
 
 def main():
-    st.set_page_config(page_title="투명한 랜덤 추첨기", page_icon="📜", layout="wide")
+    st.set_page_config(page_title="NEW LOTTERY", page_icon="📜", layout="wide")
     st_autorefresh(interval=5000, limit=None, key="main_refresher")
     conn = setup_database()
     check_and_run_scheduled_draws(conn)
@@ -111,7 +111,6 @@ def main():
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        # 이 부분은 변경 없음 (추첨 현황판)
         st.header("🎉 추첨 현황판")
         st.markdown("이 페이지는 최신 상태를 반영합니다.")
         
@@ -161,7 +160,6 @@ def main():
                         st.dataframe(logs_df, use_container_width=True, height=150)
 
     with col2:
-        # --- 관리자 메뉴: st.form 제거하고 로직 수정 ---
         st.header("👑 추첨 관리자 메뉴")
         if 'admin_auth' not in st.session_state:
             st.session_state['admin_auth'] = False
@@ -189,11 +187,14 @@ def main():
                 
                 draw_time = None
                 if draw_type == "예약 추첨":
-                    # value에 현재 시간보다 미래를 기본값으로 설정하여 오류 방지
-                    now = datetime.datetime.now()
-                    default_time = now if now.minute < 55 else now + datetime.timedelta(hours=1)
-                    default_time = default_time.replace(minute=default_time.minute // 5 * 5 + 5, second=0, microsecond=0)
-                    draw_time = st.datetime_input("추첨 시간", value=default_time, key="new_draw_time")
+                    # 안전하고 간단한 시간 계산 로직으로 수정됨
+                    default_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
+                    draw_time = st.datetime_input(
+                        "추첨 시간", 
+                        value=default_time, 
+                        min_value=datetime.datetime.now(), # 과거 시간 선택 방지
+                        key="new_draw_time"
+                    )
                 
                 participants_text = st.text_area("참가자 명단 (한 줄에 한 명, 중복 가능)", key="new_participants")
                 
@@ -201,7 +202,6 @@ def main():
                     participants = [name.strip() for name in participants_text.split('\n') if name.strip()]
                     if not title or not participants:
                         st.warning("제목과 참가자를 입력하세요.")
-                    # 예약 추첨일 때만 시간 유효성 검사
                     elif draw_type == "예약 추첨" and draw_time <= datetime.datetime.now():
                         st.error("예약 시간은 현재 시간 이후여야 합니다.")
                     else:
@@ -219,6 +219,7 @@ def main():
             
             elif admin_action == "기존 추첨 관리 (재추첨 등)":
                 st.subheader("기존 추첨 관리")
+                # 'lotteries_df' 변수가 로드 되었는지 확인 후 진행
                 if 'lotteries_df' in locals() and not lotteries_df.empty:
                     choice = st.selectbox("관리할 추첨 선택", options=lotteries_df['title'], key="manage_choice")
                     selected_lottery = lotteries_df[lotteries_df['title'] == choice].iloc[0]
