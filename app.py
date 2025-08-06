@@ -12,7 +12,7 @@ KST = datetime.timezone(datetime.timedelta(hours=9))
 def now_kst():
     return datetime.datetime.now(KST)
 
-# --- 1. 설정 및 데이터베이스 초기화 ---
+# --- 1. 설정 및 데이터베이스 초기화 (단일 관리자 버전에 맞게 수정) ---
 def setup_database():
     conn = sqlite3.connect('lottery_data_v2.db', check_same_thread=False)
     c = conn.cursor()
@@ -219,7 +219,9 @@ def main():
             st.success("관리자로 인증됨")
             st.subheader("새 추첨 만들기")
             title = st.text_input("추첨 제목", key="new_title")
-            num_winners = st.number_input("당첨 인원 수", 1, 1, key="new_num_winners")
+            # ================== 당첨 인원 수 버그 수정 ==================
+            num_winners = st.number_input("당첨 인원 수", min_value=1, value=1, key="new_num_winners")
+            # =======================================================
             draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type", horizontal=True)
             if draw_type == "예약 추첨":
                 date = st.date_input("날짜", value=now_kst().date(), key="new_draw_date")
