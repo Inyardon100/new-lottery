@@ -101,7 +101,7 @@ def check_and_run_scheduled_draws(conn):
 # --- 3. Streamlit UI 구성 ---
 def main():
     st.set_page_config(page_title="new lottery", page_icon="📜", layout="wide")
-    st_autorefresh(interval=5000, limit=None, key="main_refresher")
+    st_autorefresh(interval=1000, limit=None, key="main_refresher")
     conn = setup_database()
     check_and_run_scheduled_draws(conn)
 
