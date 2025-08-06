@@ -14,39 +14,44 @@ def now_kst():
 
 # --- 1. 설정 및 데이터베이스 초기화 ---
 def setup_database():
-    conn = sqlite3.connect('lottery_data_v2.db', check_same_thread=False,
-                           detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+    conn = sqlite3.connect('lottery_data_v2.db', check_same_thread=False)
     c = conn.cursor()
     c.execute("PRAGMA foreign_keys = ON;")
-    c.executescript('''
-    CREATE TABLE IF NOT EXISTS lotteries (
-        id INTEGER PRIMARY KEY,
-        title TEXT NOT NULL,
-        draw_time TIMESTAMP,
-        num_winners INTEGER,
-        status TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS participants (
-        id INTEGER PRIMARY KEY,
-        lottery_id INTEGER,
-        name TEXT NOT NULL,
-        FOREIGN KEY (lottery_id) REFERENCES lotteries (id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS winners (
-        id INTEGER PRIMARY KEY,
-        lottery_id INTEGER,
-        winner_name TEXT,
-        draw_round INTEGER,
-        FOREIGN KEY (lottery_id) REFERENCES lotteries (id) ON DELETE CASCADE
-    );
-    CREATE TABLE IF NOT EXISTS lottery_logs (
-        id INTEGER PRIMARY KEY,
-        lottery_id INTEGER,
-        log_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        log_message TEXT,
-        FOREIGN KEY (lottery_id) REFERENCES lotteries (id) ON DELETE CASCADE
-    );
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS lotteries (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            draw_time TIMESTAMP,
+            num_winners INTEGER,
+            status TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS participants (
+            id INTEGER PRIMARY KEY,
+            lottery_id INTEGER,
+            name TEXT NOT NULL,
+            FOREIGN KEY (lottery_id) REFERENCES lotteries (id) ON DELETE CASCADE
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS winners (
+            id INTEGER PRIMARY KEY,
+            lottery_id INTEGER,
+            winner_name TEXT,
+            draw_round INTEGER,
+            FOREIGN KEY (lottery_id) REFERENCES lotteries (id) ON DELETE CASCADE
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS lottery_logs (
+            id INTEGER PRIMARY KEY,
+            lottery_id INTEGER,
+            log_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            log_message TEXT,
+            FOREIGN KEY (lottery_id) REFERENCES lotteries (id) ON DELETE CASCADE
+        )
     ''')
     conn.commit()
     return conn
@@ -55,8 +60,8 @@ def setup_database():
 def add_log(conn, lottery_id, message):
     c = conn.cursor()
     c.execute(
-        "INSERT INTO lottery_logs (lottery_id, log_message, log_timestamp) VALUES (?, ?, ?)",
-        (lottery_id, message, now_kst())
+        "INSERT INTO lottery_logs (lottery_id, log_message) VALUES (?, ?)",
+        (lottery_id, message)
     )
     conn.commit()
 
@@ -109,15 +114,15 @@ def main():
     st.markdown("---")
     col1, col2 = st.columns([2, 1])
 
-    # 추첨 현황판 (UI 개선 버전)
+    # 좌측: 추첨 현황판 (UI 개선 버전)
     with col1:
         st.header("🎉 추첨 현황판")
         st.markdown("아래 목록에서 확인할 추첨을 선택하세요.")
         try:
             df_lot = pd.read_sql(
-                "SELECT id, title, draw_time, status FROM lotteries ORDER BY id DESC", conn, parse_dates=['draw_time']
+                "SELECT id, title, draw_time, status FROM lotteries ORDER BY id DESC", conn
             )
-        except Exception:
+        except:
             df_lot = pd.DataFrame()
 
         if df_lot.empty:
@@ -130,25 +135,26 @@ def main():
                 option_label = f"{row['title']} | {status_emoji}"
                 options_map[option_label] = int(row['id'])
 
-            # 라디오 버튼을 사용해 클릭 가능한 목록 구현
             selected_option = st.radio(
-                "추첨 목록",
-                options=options_map.keys(),
-                key="lottery_selector",
-                label_visibility="collapsed" # 라디오 그룹의 라벨("추첨 목록")은 숨김
+                "추첨 목록", options=options_map.keys(), key="lottery_selector", label_visibility="collapsed"
             )
             
-            # --- 선택된 추첨의 상세 정보만 표시 ---
             if selected_option:
                 selected_id = options_map[selected_option]
-                # 전체 데이터프레임에서 선택된 행의 정보만 가져옴
                 sel = df_lot[df_lot['id'] == selected_id].iloc[0]
-                lid, title, status, draw_time = int(sel['id']), sel['title'], sel['status'], sel['draw_time']
+                lid, title, status = int(sel['id']), sel['title'], sel['status']
                 
+                # =================== 안정적인 시간 처리 로직 복원 ===================
+                raw = sel['draw_time']
+                if isinstance(raw, str):
+                    draw_time = datetime.datetime.fromisoformat(raw)
+                else:
+                    draw_time = raw
                 if draw_time.tzinfo is None:
-                    draw_time = draw_time.tz_localize(KST)
+                    draw_time = draw_time.replace(tzinfo=KST)
+                # =================================================================
 
-                with st.container(border=True): # 상세 정보만 카드 UI로 감쌈
+                with st.container(border=True):
                     st.subheader(f"✨ {title}")
                     if status == 'completed':
                         st.success(f"**추첨 완료!** ({draw_time.strftime('%Y-%m-%d %H:%M:%S %Z')})")
@@ -158,12 +164,9 @@ def main():
                             st.markdown(f"#### 🏆 {label} 당첨자")
                             tags = " &nbsp; ".join([f"<span style='background-color:#E8F5E9; color:#1E8E3E; border-radius:5px; padding:5px 10px; font-weight:bold;'>{n}</span>" for n in grp['winner_name']])
                             st.markdown(f"<p style='text-align:center; font-size:20px;'>{tags}</p>", unsafe_allow_html=True)
-                        
-                        # 풍선 애니메이션 추가
                         if st.session_state.get(f'celebrated_{lid}', False):
-                            st.balloons()
-                            st.session_state[f'celebrated_{lid}'] = False
-                    else: # scheduled
+                            st.balloons(); st.session_state[f'celebrated_{lid}'] = False
+                    else:
                         diff = draw_time - now_kst()
                         if diff.total_seconds() > 0:
                             st.info(f"**추첨 예정:** {draw_time.strftime('%Y-%m-%d %H:%M:%S %Z')} (남은 시간: {str(diff).split('.')[0]})")
