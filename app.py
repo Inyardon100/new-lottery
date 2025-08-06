@@ -133,7 +133,6 @@ def main():
                 st.dataframe(logs, height=200)
 
         # 완료
-                # 완료
         with tabs[1]:
             df2 = pd.read_sql("SELECT id, title FROM lotteries WHERE status='completed' ORDER BY id DESC", conn)
             if df2.empty:
@@ -144,20 +143,13 @@ def main():
                 lid2 = int(sel2['id'])
                 st.subheader(f"🏆 {sel2['title']} 당첨 결과")
                 winners = pd.read_sql(
-                    "SELECT winner_name, draw_round FROM winners WHERE lottery_id=? ORDER BY draw_round", 
+                    "SELECT winner_name, draw_round FROM winners WHERE lottery_id=? ORDER BY draw_round",
                     conn, params=(lid2,)
                 )
+                # 당첨자 간단 리스트 형태로 표시
                 for rnd, grp in winners.groupby('draw_round'):
-                    round_label = '1회차' if rnd == 1 else f"{rnd}회차 (재추첨)"
-                    st.markdown(f"#### 🎀 {round_label} 당첨자")
-                    tags = " ".join([
-                        f"<span style='background-color:#E8F5E9; color:#1E8E3E; border-radius:6px; padding:6px 12px; font-weight:bold;'>{name}</span>"
-                        for name in grp['winner_name']
-                    ])
-                    st.markdown(f"<div style='text-align:center;'>{tags}</div>", unsafe_allow_html=True)
-                    if st.session_state.get(f'celebrated_{lid2}', False):
-                        st.balloons()
-                        st.session_state[f'celebrated_{lid2}'] = False
+                    label = '1회차' if rnd==1 else f"{rnd}회차 (재추첨)"
+                    st.write(f"**{label} 당첨자:** {', '.join(grp['winner_name'])}")
 
     # 우측: 관리자 메뉴
     with col2:
