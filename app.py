@@ -164,7 +164,7 @@ def main():
                 if draw_type == "예약 추첨":
                     date = st.date_input("추첨 날짜 (YYYY-MM-DD)", value=now_kst().date(), key="new_draw_date")
                     default_tm = st.session_state.get('new_draw_time', now_kst().time())
-                    tm = st.time_input("추첨 시간 (HH:MM)", value=default_tm, key="new_draw_time")
+                    tm = st.time_input("추첨 시간 (HH:MM)", value=default_tm, key="new_draw_time", step=60)
                     draw_time = datetime.datetime.combine(date, tm, tzinfo=KST)
                 else:
                     draw_time = now_kst()
