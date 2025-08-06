@@ -187,7 +187,7 @@ def main():
                     draw_time = now_kst()
 
                 st.markdown("참가자 명단을 입력하세요. 한 줄에 한 명씩 적어주세요.")
-                participants_txt = st.text_area("참가자 (예: 홍길동)\n홍길순", key="new_participants", height=150)
+                participants_txt = st.text_area("참가자 (예: 홍길동)", key="new_participants", height=150)
                 if st.button("추첨 생성", key="create_button", type="primary"):
                     names = [n.strip() for n in participants_txt.split('\n') if n.strip()]
                     if not title or not names:
@@ -254,3 +254,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
