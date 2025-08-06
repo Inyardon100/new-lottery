@@ -130,7 +130,15 @@ def main():
         else:
             for _, row in df_lot.iterrows():
                 lid, title, status = int(row['id']), row['title'], row['status']
-                draw_time = pd.to_datetime(row['draw_time']).tz_convert('Asia/Seoul')
+                raw = row['draw_time']
+                # 문자열 또는 datetime 객체 처리
+                if isinstance(raw, str):
+                    draw_time = datetime.datetime.fromisoformat(raw)
+                else:
+                    draw_time = raw
+                # 타임존 정보가 없으면 한국시간으로 설정
+                if draw_time.tzinfo is None:
+                    draw_time = draw_time.replace(tzinfo=KST)
                 with st.container():
                     st.subheader(f"✨ {title}")
                     winners_df = pd.read_sql(
