@@ -185,9 +185,13 @@ def main():
                                 st.success("관리 권한이 인증되었습니다.")
                                 all_p = pd.read_sql("SELECT name FROM participants WHERE lottery_id=?", conn, params=(lid,))['name'].tolist()
                                 prev = pd.read_sql("SELECT winner_name FROM winners WHERE lottery_id=?", conn, params=(lid,))['winner_name'].tolist()
+                                
+                                # ================== 재추첨 중복 버그 수정 ==================
                                 cand = list(all_p)
                                 for winner in prev:
                                     if winner in cand: cand.remove(winner)
+                                # =======================================================
+                                    
                                 if cand:
                                     redraw_type = st.radio("재추첨 방식", ["즉시 추첨", "예약 추첨"], key=f"detail_redraw_type_{lid}", horizontal=True)
                                     redraw_time = now_kst()
