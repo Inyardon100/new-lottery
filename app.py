@@ -138,19 +138,20 @@ def main():
             if df_lot.empty:
                 st.info("아직 생성된 추첨이 없습니다.")
             else:
+                # 각 추첨 항목을 border가 있는 컨테이너로 감싸 가독성 향상
                 for _, row in df_lot.iterrows():
-                    list_col1, list_col2, list_col3 = st.columns([5, 2, 2])
-                    status_emoji = "🟢 진행중" if row['status'] == 'scheduled' else "🏁 완료"
-                    with list_col1:
-                        st.write(f"#### {row['title']}")
-                    with list_col2:
-                        st.markdown(f"**{status_emoji}**")
-                    with list_col3:
-                        if st.button("상세보기", key=f"detail_btn_{row['id']}"):
-                            st.session_state.view_mode = 'detail'
-                            st.session_state.selected_lottery_id = int(row['id'])
-                            st.experimental_rerun()
-                    st.markdown("---")
+                    with st.container(border=True):
+                        list_col1, list_col2, list_col3 = st.columns([5, 2, 2])
+                        status_emoji = "🟢 진행중" if row['status'] == 'scheduled' else "🏁 완료"
+                        with list_col1:
+                            st.write(f"#### {row['title']}")
+                        with list_col2:
+                            st.markdown(f"**{status_emoji}**")
+                        with list_col3:
+                            if st.button("상세보기", key=f"detail_btn_{row['id']}"):
+                                st.session_state.view_mode = 'detail'
+                                st.session_state.selected_lottery_id = int(row['id'])
+                                st.experimental_rerun()
 
     # 관리자 메뉴 (사용자 제공 코드와 100% 동일)
     with col2:
