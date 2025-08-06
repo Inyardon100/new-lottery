@@ -6,6 +6,9 @@ import datetime
 import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
+# --- 시간대 설정 (한국시간) ---
+KST = datetime.timezone(datetime.timedelta(hours=9))
+
 # --- 1. 설정 및 데이터베이스 초기화 ---
 def setup_database():
     conn = sqlite3.connect('lottery_data_v2.db', check_same_thread=False)
@@ -82,7 +85,7 @@ def run_draw(conn, lottery_id, num_to_draw, candidates):
 
 def check_and_run_scheduled_draws(conn):
     c = conn.cursor()
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(KST)
     c.execute(
         "SELECT id, num_winners FROM lotteries WHERE status = 'scheduled' AND draw_time <= ?", (now,)
     )
@@ -150,7 +153,7 @@ def main():
                             st.balloons()
                             st.session_state[f'celebrated_{lid}'] = False
                     else:
-                        diff = draw_time - datetime.datetime.now()
+                        diff = draw_time - datetime.datetime.now(KST)
                         if diff.total_seconds() > 0:
                             st.info(f"**추첨 예정:** {draw_time.strftime('%Y-%m-%d %H:%M:%S')} (남은 시간: {str(diff).split('.')[0]})")
                         else:
