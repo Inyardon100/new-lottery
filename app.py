@@ -92,38 +92,44 @@ def main():
                 st.experimental_rerun()
             
             lid = st.session_state.selected_lottery_id
-            sel_row = pd.read_sql("SELECT * FROM lotteries WHERE id = ?", conn, params=(lid,)).iloc[0]
-            title, status = sel_row['title'], sel_row['status']
-            
-            raw = sel_row['draw_time']
-            if isinstance(raw, str): draw_time = datetime.datetime.fromisoformat(raw)
-            else: draw_time = raw
-            if draw_time.tzinfo is None: draw_time = draw_time.replace(tzinfo=KST)
-
-            with st.container(border=True):
-                st.header(f"✨ {title}")
-                if status == 'completed':
-                    st.success(f"**추첨 완료!** ({draw_time.strftime('%Y-%m-%d %H:%M:%S %Z')})")
-                    winners_df = pd.read_sql("SELECT winner_name, draw_round FROM winners WHERE lottery_id = ? ORDER BY draw_round", conn, params=(lid,))
-                    for rnd, grp in winners_df.groupby('draw_round'):
-                        label = '1회차' if rnd == 1 else f"{rnd}회차 (재추첨)"
-                        st.markdown(f"#### 🏆 {label} 당첨자")
-                        tags = " &nbsp; ".join([f"<span style='background-color:#E8F5E9; color:#1E8E3E; border-radius:5px; padding:5px 10px; font-weight:bold;'>{n}</span>" for n in grp['winner_name']])
-                        st.markdown(f"<p style='text-align:center; font-size:20px;'>{tags}</p>", unsafe_allow_html=True)
-                    if st.session_state.get(f'celebrated_{lid}', False):
-                        st.balloons(); st.session_state[f'celebrated_{lid}'] = False
-                else: # scheduled
-                    diff = draw_time - now_kst()
-                    if diff.total_seconds() > 0: st.info(f"**추첨 예정:** {draw_time.strftime('%Y-%m-%d %H:%M:%S %Z')} (남은 시간: {str(diff).split('.')[0]})")
-                    else: st.warning("예정 시간이 지났습니다. 곧 자동 진행됩니다...")
+            try:
+                sel_row = pd.read_sql("SELECT * FROM lotteries WHERE id = ?", conn, params=(lid,)).iloc[0]
+                title, status = sel_row['title'], sel_row['status']
                 
-                tab1, tab2 = st.tabs(["참가자 명단", "📜 추첨 로그"])
-                with tab1:
-                    part_df = pd.read_sql("SELECT name FROM participants WHERE lottery_id = ?", conn, params=(lid,))
-                    st.dataframe(part_df.rename(columns={'name':'이름'}), use_container_width=True, height=200)
-                with tab2:
-                    log_df = pd.read_sql("SELECT strftime('%Y-%m-%d %H:%M:%S', log_timestamp, 'localtime') AS 시간, log_message AS 내용 FROM lottery_logs WHERE lottery_id = ? ORDER BY id", conn, params=(lid,))
-                    st.dataframe(log_df, use_container_width=True, height=200)
+                raw = sel_row['draw_time']
+                if isinstance(raw, str): draw_time = datetime.datetime.fromisoformat(raw)
+                else: draw_time = raw
+                if draw_time.tzinfo is None: draw_time = draw_time.replace(tzinfo=KST)
+
+                with st.container(border=True):
+                    st.header(f"✨ {title}")
+                    if status == 'completed':
+                        st.success(f"**추첨 완료!** ({draw_time.strftime('%Y-%m-%d %H:%M:%S %Z')})")
+                        winners_df = pd.read_sql("SELECT winner_name, draw_round FROM winners WHERE lottery_id = ? ORDER BY draw_round", conn, params=(lid,))
+                        for rnd, grp in winners_df.groupby('draw_round'):
+                            label = '1회차' if rnd == 1 else f"{rnd}회차 (재추첨)"
+                            st.markdown(f"#### 🏆 {label} 당첨자")
+                            tags = " &nbsp; ".join([f"<span style='background-color:#E8F5E9; color:#1E8E3E; border-radius:5px; padding:5px 10px; font-weight:bold;'>{n}</span>" for n in grp['winner_name']])
+                            st.markdown(f"<p style='text-align:center; font-size:20px;'>{tags}</p>", unsafe_allow_html=True)
+                        if st.session_state.get(f'celebrated_{lid}', False):
+                            st.balloons(); st.session_state[f'celebrated_{lid}'] = False
+                    else: # scheduled
+                        diff = draw_time - now_kst()
+                        if diff.total_seconds() > 0: st.info(f"**추첨 예정:** {draw_time.strftime('%Y-%m-%d %H:%M:%S %Z')} (남은 시간: {str(diff).split('.')[0]})")
+                        else: st.warning("예정 시간이 지났습니다. 곧 자동 진행됩니다...")
+                    
+                    tab1, tab2 = st.tabs(["참가자 명단", "📜 추첨 로그"])
+                    with tab1:
+                        part_df = pd.read_sql("SELECT name FROM participants WHERE lottery_id = ?", conn, params=(lid,))
+                        st.dataframe(part_df.rename(columns={'name':'이름'}), use_container_width=True, height=200)
+                    with tab2:
+                        log_df = pd.read_sql("SELECT strftime('%Y-%m-%d %H:%M:%S', log_timestamp, 'localtime') AS 시간, log_message AS 내용 FROM lottery_logs WHERE lottery_id = ? ORDER BY id", conn, params=(lid,))
+                        st.dataframe(log_df, use_container_width=True, height=200)
+            except (IndexError, pd.errors.EmptyDataError):
+                 st.error("선택한 추첨을 찾을 수 없습니다. 삭제되었을 수 있습니다.")
+                 st.session_state.view_mode = 'list'
+                 st.session_state.selected_lottery_id = None
+
 
         # '목록 보기' 상태일 때 (기본값)
         else:
@@ -133,16 +139,17 @@ def main():
                 st.info("아직 생성된 추첨이 없습니다.")
             else:
                 for _, row in df_lot.iterrows():
-                    list_col1, list_col2 = st.columns([4, 1])
+                    list_col1, list_col2, list_col3 = st.columns([5, 2, 2])
                     status_emoji = "🟢 진행중" if row['status'] == 'scheduled' else "🏁 완료"
                     with list_col1:
                         st.write(f"#### {row['title']}")
                     with list_col2:
+                        st.markdown(f"**{status_emoji}**")
+                    with list_col3:
                         if st.button("상세보기", key=f"detail_btn_{row['id']}"):
                             st.session_state.view_mode = 'detail'
                             st.session_state.selected_lottery_id = int(row['id'])
                             st.experimental_rerun()
-                    st.markdown(f"**상태:** {status_emoji}")
                     st.markdown("---")
 
     # 관리자 메뉴 (사용자 제공 코드와 100% 동일)
@@ -157,7 +164,7 @@ def main():
                     st.error("코드가 올바르지 않습니다.")
         else:
             st.success("관리자로 인증됨")
-            action = st.radio("작업 선택", ["새 추첨 생성", "기존 추첨 관리"], key="admin_action_radio")
+            action = st.radio("작업 선택", ["새 추첨 생성", "기존 추첨 관리"], key="admin_action_radio", horizontal=True)
 
             if action == "새 추첨 생성":
                 st.subheader("새 추첨 만들기")
@@ -219,6 +226,7 @@ def main():
                             c.execute("DELETE FROM lotteries WHERE id=?", (lid,)); conn.commit()
                             st.session_state.delete_confirm_id = None
                             st.session_state.view_mode = 'list' # 삭제 후 목록으로 돌아가기
+                            st.session_state.selected_lottery_id = None
                             st.success("삭제 완료"); time.sleep(1); st.experimental_rerun()
     conn.close()
 
