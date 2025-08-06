@@ -100,7 +100,7 @@ def check_and_run_scheduled_draws(conn):
 # --- 3. Streamlit UI 구성 ---
 
 def main():
-    st.set_page_config(page_title="NEW LOTTERY", page_icon="📜", layout="wide")
+    st.set_page_config(page_title="new lottery", page_icon="📜", layout="wide")
     st_autorefresh(interval=5000, limit=None, key="main_refresher")
     conn = setup_database()
     check_and_run_scheduled_draws(conn)
@@ -187,14 +187,15 @@ def main():
                 
                 draw_time = None
                 if draw_type == "예약 추첨":
-                    # 안전하고 간단한 시간 계산 로직으로 수정됨
+                    # ================================================================= #
+                    # min_value 옵션을 제거하여 렌더링 안정성을 확보합니다.
                     default_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
                     draw_time = st.datetime_input(
                         "추첨 시간", 
-                        value=default_time, 
-                        min_value=datetime.datetime.now(), # 과거 시간 선택 방지
+                        value=default_time,
                         key="new_draw_time"
                     )
+                    # ================================================================= #
                 
                 participants_text = st.text_area("참가자 명단 (한 줄에 한 명, 중복 가능)", key="new_participants")
                 
@@ -219,7 +220,6 @@ def main():
             
             elif admin_action == "기존 추첨 관리 (재추첨 등)":
                 st.subheader("기존 추첨 관리")
-                # 'lotteries_df' 변수가 로드 되었는지 확인 후 진행
                 if 'lotteries_df' in locals() and not lotteries_df.empty:
                     choice = st.selectbox("관리할 추첨 선택", options=lotteries_df['title'], key="manage_choice")
                     selected_lottery = lotteries_df[lotteries_df['title'] == choice].iloc[0]
