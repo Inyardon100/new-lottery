@@ -12,7 +12,7 @@ KST = datetime.timezone(datetime.timedelta(hours=9))
 def now_kst():
     return datetime.datetime.now(KST)
 
-# --- 1. 설정 및 데이터베이스 초기화 ---
+# --- 1. 설정 및 데이터베이스 초기화 (사용자 제공 버전과 동일) ---
 def setup_database():
     conn = sqlite3.connect('lottery_data_v2.db', check_same_thread=False)
     c = conn.cursor()
@@ -32,10 +32,10 @@ def setup_database():
     conn.commit()
     return conn
 
-# --- 2. 헬퍼 및 로직 함수 ---
+# --- 2. 헬퍼 및 로직 함수 (사용자 제공 버전과 동일) ---
 def add_log(conn, lottery_id, message):
     c = conn.cursor()
-    c.execute("INSERT INTO lottery_logs (lottery_id, log_message, log_timestamp) VALUES (?, ?, ?)", (lottery_id, message, now_kst()))
+    c.execute("INSERT INTO lottery_logs (lottery_id, log_message) VALUES (?, ?)",(lottery_id, message))
     conn.commit()
 
 def run_draw(conn, lottery_id, num_to_draw, candidates):
@@ -130,7 +130,6 @@ def main():
                  st.session_state.view_mode = 'list'
                  st.session_state.selected_lottery_id = None
 
-
         # '목록 보기' 상태일 때 (기본값)
         else:
             st.header("🎉 추첨 목록")
@@ -138,7 +137,6 @@ def main():
             if df_lot.empty:
                 st.info("아직 생성된 추첨이 없습니다.")
             else:
-                # 각 추첨 항목을 border가 있는 컨테이너로 감싸 가독성 향상
                 for _, row in df_lot.iterrows():
                     with st.container(border=True):
                         list_col1, list_col2, list_col3 = st.columns([5, 2, 2])
@@ -153,35 +151,44 @@ def main():
                                 st.session_state.selected_lottery_id = int(row['id'])
                                 st.experimental_rerun()
 
-    # 관리자 메뉴 (사용자 제공 코드와 100% 동일)
+    # ==================== 관리자 메뉴 (사용자 제공 '안전성 끝판왕' 코드와 100% 동일) ====================
     with col2:
         st.header("👑 추첨 관리자")
         if not st.session_state.admin_auth:
             pw = st.text_input("관리자 코드", type="password", key="admin_pw_input")
             if st.button("인증", key="auth_button"):
                 if pw == st.secrets.get('admin', {}).get('password'):
-                    st.session_state.admin_auth = True; st.experimental_rerun()
+                    st.session_state.admin_auth = True
+                    st.experimental_rerun()
                 else:
                     st.error("코드가 올바르지 않습니다.")
         else:
             st.success("관리자로 인증됨")
-            action = st.radio("작업 선택", ["새 추첨 생성", "기존 추첨 관리"], key="admin_action_radio", horizontal=True)
+            action = st.radio("작업 선택", ["새 추첨 생성", "기존 추첨 관리"], key="admin_action_radio")
 
             if action == "새 추첨 생성":
                 st.subheader("새 추첨 만들기")
                 title = st.text_input("추첨 제목", key="new_title")
                 num_winners = st.number_input("당첨 인원 수", min_value=1, value=1, key="new_num_winners")
-                draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type", horizontal=True)
+                draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type")
 
                 if draw_type == "예약 추첨":
-                    date = st.date_input("날짜", value=now_kst().date(), key="new_draw_date")
-                    tm = st.time_input("시간 (HH:MM)", value=(now_kst() + datetime.timedelta(minutes=5)).time(), step=datetime.timedelta(minutes=1), key="new_draw_time")
+                    date = st.date_input("추첨 날짜 (YYYY-MM-DD 형식으로 선택)", value=now_kst().date(), key="new_draw_date")
+                    # 시간 선택 값이 변경되지 않는 문제 해결을 위해 세션 상태에 저장된 값 사용
+                    default_tm = st.session_state.get('new_draw_time', now_kst().time())
+                    tm = st.time_input(
+                        "추첨 시간 (HH:MM)",
+                        value=default_tm,
+                        key="new_draw_time",
+                        step=datetime.timedelta(minutes=1) # 1분 단위로 변경 가능
+                    )
                     draw_time = datetime.datetime.combine(date, tm, tzinfo=KST)
                 else:
                     draw_time = now_kst()
 
-                participants_txt = st.text_area("참가자 명단 (한 줄에 한 명)", key="new_participants", height=150)
-                if st.button("✅ 추첨 생성", key="create_button", type="primary"):
+                st.markdown("참가자 명단을 입력하세요. 한 줄에 한 명씩 적어주세요.")
+                participants_txt = st.text_area("참가자 (예: 홍길동)\n홍길순", key="new_participants", height=150)
+                if st.button("추첨 생성", key="create_button", type="primary"):
                     names = [n.strip() for n in participants_txt.split('\n') if n.strip()]
                     if not title or not names:
                         st.warning("제목과 참가자를 입력하세요.")
@@ -189,12 +196,18 @@ def main():
                         st.error("예약 시간은 현재 이후여야 합니다.")
                     else:
                         c = conn.cursor()
-                        c.execute("INSERT INTO lotteries (title, draw_time, num_winners, status) VALUES (?, ?, ?, 'scheduled')", (title, draw_time, num_winners))
+                        c.execute(
+                            "INSERT INTO lotteries (title, draw_time, num_winners, status) VALUES (?, ?, ?, 'scheduled')",
+                            (title, draw_time, num_winners)
+                        )
                         lid = c.lastrowid
-                        for n in names: c.execute("INSERT INTO participants (lottery_id, name) VALUES (?, ?)", (lid, n))
+                        for n in names:
+                            c.execute("INSERT INTO participants (lottery_id, name) VALUES (?, ?)", (lid, n))
                         conn.commit()
                         add_log(conn, lid, f"추첨 생성 (방식: {draw_type}, 참가자 수: {len(names)})")
-                        st.success("추첨 생성 완료"); time.sleep(1); st.experimental_rerun()
+                        st.success("추첨 생성 완료")
+                        time.sleep(1)
+                        st.experimental_rerun()
 
             else:
                 st.subheader("기존 추첨 관리")
@@ -205,6 +218,7 @@ def main():
                     choice = st.selectbox("추첨 선택", df_m['title'], key="manage_choice")
                     sel = df_m[df_m['title']==choice].iloc[0]
                     lid = int(sel['id'])
+                    # 재추첨
                     if sel['status']=='completed':
                         st.write("**재추첨**")
                         all_p = pd.read_sql("SELECT name FROM participants WHERE lottery_id=?", conn, params=(lid,))['name'].tolist()
@@ -212,23 +226,30 @@ def main():
                         cand = [p for p in all_p if p not in prev]
                         if cand:
                             chosen = st.multiselect("재추첨 후보자", cand, default=cand, key=f"redraw_candidates_{lid}")
-                            num_r = st.number_input("추첨 인원 수", 1, len(chosen), 1, key=f"redraw_num_winners_{lid}")
+                            num_r = st.number_input("추첨 인원 수", min_value=1, max_value=len(chosen), value=1, key=f"redraw_num_winners_{lid}")
                             if st.button("재추첨 실행", key=f"redraw_button_{lid}", type="primary"):
-                                run_draw(conn, lid, num_r, chosen); st.success("재추첨 완료"); time.sleep(1); st.experimental_rerun()
+                                run_draw(conn, lid, num_r, chosen)
+                                st.success("재추첨 완료")
+                                time.sleep(1)
+                                st.experimental_rerun()
                         else:
                             st.warning("재추첨 후보가 없습니다.")
                     st.markdown("---")
+                    # 삭제
                     if st.button("삭제", key=f"delete_button_{lid}"):
                         st.session_state.delete_confirm_id = lid
                     if st.session_state.delete_confirm_id == lid:
                         st.warning("정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")
                         if st.button("예, 삭제합니다", key=f"confirm_delete_button_{lid}", type="primary"):
                             c = conn.cursor()
-                            c.execute("DELETE FROM lotteries WHERE id=?", (lid,)); conn.commit()
+                            c.execute("DELETE FROM lotteries WHERE id=?", (lid,))
+                            conn.commit()
                             st.session_state.delete_confirm_id = None
                             st.session_state.view_mode = 'list' # 삭제 후 목록으로 돌아가기
                             st.session_state.selected_lottery_id = None
-                            st.success("삭제 완료"); time.sleep(1); st.experimental_rerun()
+                            st.success("삭제 완료")
+                            time.sleep(1)
+                            st.experimental_rerun()
     conn.close()
 
 if __name__ == "__main__":
