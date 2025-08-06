@@ -185,17 +185,15 @@ def main():
                 
                 draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], horizontal=True, key="new_draw_type")
                 
-                draw_time = None
-                if draw_type == "예약 추첨":
-                    # ================================================================= #
-                    # min_value 옵션을 제거하여 렌더링 안정성을 확보합니다.
-                    default_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
-                    draw_time = st.datetime_input(
-                        "추첨 시간", 
-                        value=default_time,
-                        key="new_draw_time"
-                    )
-                    # ================================================================= #
+                # ================================================================= #
+                # 문제의 핵심 해결책: 위젯을 항상 렌더링하되, disabled 옵션으로 제어
+                draw_time = st.datetime_input(
+                    "추첨 시간",
+                    value=datetime.datetime.now() + datetime.timedelta(minutes=5),
+                    key="new_draw_time",
+                    disabled=(draw_type == "즉시 추첨") # '즉시 추첨'일 때 비활성화
+                )
+                # ================================================================= #
                 
                 participants_text = st.text_area("참가자 명단 (한 줄에 한 명, 중복 가능)", key="new_participants")
                 
