@@ -236,7 +236,10 @@ def main():
                         st.warning(f"'{rec['title']}' 삭제하시겠습니까?")
                         if st.button("예, 삭제합니다", key=f"confirm_{lid}"):
                             cur = conn.cursor()
-                            cur.execute("DELETE FROM lotteries WHERE id=?",(lid,))
+                            cur.execute("DELETE FROM participants WHERE lottery_id=?", (lid,))
+                            cur.execute("DELETE FROM winners WHERE lottery_id=?", (lid,))
+                            cur.execute("DELETE FROM lottery_logs WHERE lottery_id=?", (lid,))
+                            cur.execute("DELETE FROM lotteries WHERE id=?", (lid,))
                             conn.commit()
                             st.success("삭제 완료")
                             time.sleep(1)
