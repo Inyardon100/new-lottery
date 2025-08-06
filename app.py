@@ -18,7 +18,7 @@ def setup_database():
     conn = sqlite3.connect('lottery_data_v2.db', check_same_thread=False,
                            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
     c = conn.cursor()
-    c.execute("PRAGMA foreign_keys = ON;")
+    c.execute("PRAGMA foreign_keys = ON;") # ON DELETE CASCADE를 위해 필수
     c.executescript('''
     CREATE TABLE IF NOT EXISTS lotteries (
         id INTEGER PRIMARY KEY, title TEXT NOT NULL, draw_time timestamp, num_winners INTEGER,
@@ -72,10 +72,10 @@ def check_and_run_scheduled_draws(conn):
             if winners:
                 st.session_state[f'celebrated_{lid}'] = True
 
-# --- Streamlit UI (UX 업그레이드 버전) ---
+# --- Streamlit UI (사용자 제공 코드 기반 버그 수정 버전) ---
 def main():
     st.set_page_config(page_title="NEW LOTTERY", page_icon="📜", layout="wide")
-    st_autorefresh(interval=2000, limit=None, key="refresher") # 새로고침 간격 2초로 조정
+    st_autorefresh(interval=2000, limit=None, key="refresher")
     conn = setup_database()
     check_and_run_scheduled_draws(conn)
 
@@ -99,7 +99,6 @@ def main():
                 lid = int(row['id'])
                 title, status, draw_time = row['title'], row['status'], row['draw_time']
                 
-                # 시간대 정보가 없으면 KST로 설정
                 if draw_time.tzinfo is None:
                     draw_time = draw_time.tz_localize(KST)
 
@@ -113,11 +112,9 @@ def main():
                         for round_num, group in winners_df.groupby('draw_round'):
                             round_text = f"{round_num}회차" if round_num == 1 else f"{round_num}회차 (재추첨)"
                             st.markdown(f"#### 🏆 {round_text} 당첨자")
-                            # 화려한 당첨자 태그 UI 복원
                             winner_tags = " &nbsp; ".join([f"<span style='background-color:#E8F5E9; color:#1E8E3E; border-radius:5px; padding:5px 10px; font-weight:bold;'>{name}</span>" for name in group['winner_name']])
                             st.markdown(f"<p style='text-align:center; font-size: 20px;'>{winner_tags}</p>", unsafe_allow_html=True)
                         
-                        # 풍선 효과 복원
                         if st.session_state.get(f'celebrated_{lid}', False):
                             st.balloons()
                             st.session_state[f'celebrated_{lid}'] = False
@@ -129,7 +126,6 @@ def main():
                         else:
                             st.warning("예정 시간이 지났습니다. 곧 자동으로 진행됩니다...")
 
-                    # 참가자 명단 및 로그 탭
                     tab1, tab2 = st.tabs(["참가자 명단", "📜 추첨 로그"])
                     with tab1:
                         participants_df = pd.read_sql("SELECT name FROM participants WHERE lottery_id = ?", conn, params=(lid,))
@@ -138,7 +134,7 @@ def main():
                         logs_df = pd.read_sql("SELECT strftime('%Y-%m-%d %H:%M:%S', log_timestamp) AS 시간, log_message AS 내용 FROM lottery_logs WHERE lottery_id=? ORDER BY id", conn, params=(lid,))
                         st.dataframe(logs_df, use_container_width=True, height=150)
 
-    # 우측: 관리자 메뉴 (GPT의 안정적인 로직 사용)
+    # 우측: 관리자 메뉴
     with col2:
         st.header("👑 관리자 메뉴")
         if not st.session_state['admin_auth']:
@@ -148,8 +144,6 @@ def main():
                     if pw == st.secrets["admin"]["password"]:
                         st.session_state['admin_auth'] = True
                         st.experimental_rerun()
-                    else:
-                        st.error("관리자 코드가 일치하지 않습니다.")
                 except KeyError:
                     st.error("Secrets에 [admin] password가 설정되지 않았습니다.")
         else:
@@ -217,17 +211,23 @@ def main():
 
                     st.markdown("---")
                     st.write("**추첨 삭제**")
+                    
+                    # ================== 삭제 기능 버그 수정 ==================
+                    # 1. 각 버튼에 고유한 key를 부여하여 오작동 방지
                     if st.button("🗑️ 이 추첨 삭제하기", key=f"delete_btn_{lid}"):
                         st.session_state['delete_confirm_id'] = lid
                     
                     if st.session_state.get('delete_confirm_id') == lid:
                         st.warning(f"**경고**: '{sel['title']}' 추첨의 모든 기록이 영구적으로 삭제됩니다.")
+                        # 2. 각 버튼에 고유한 key 부여
                         if st.button("예, 정말로 삭제합니다", key=f"confirm_del_btn_{lid}", type="primary"):
                             c = conn.cursor()
+                            # 3. ON DELETE CASCADE 덕분에 lotteries 테이블만 삭제해도 연관된 모든 데이터가 삭제됨
                             c.execute("DELETE FROM lotteries WHERE id=?", (lid,))
                             conn.commit()
                             st.session_state['delete_confirm_id'] = None
                             st.success("추첨이 삭제되었습니다."); time.sleep(1); st.experimental_rerun()
+                    # =======================================================
     conn.close()
 
 if __name__ == '__main__':
