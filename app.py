@@ -60,8 +60,8 @@ def setup_database():
 def add_log(conn, lottery_id, message):
     c = conn.cursor()
     c.execute(
-        "INSERT INTO lottery_logs (lottery_id, log_message) VALUES (?, ?)",
-        (lottery_id, message)
+        "INSERT INTO lottery_logs (lottery_id, log_message, log_timestamp) VALUES (?, ?)",
+        (lottery_id, message, now_kst())
     )
     conn.commit()
 
@@ -105,16 +105,15 @@ def main():
     conn = setup_database()
     check_and_run_scheduled_draws(conn)
 
-    if 'admin_auth' not in st.session_state:
-        st.session_state['admin_auth'] = False
-    if 'delete_confirm_id' not in st.session_state:
-        st.session_state['delete_confirm_id'] = None
+    st.session_state.setdefault('admin_auth', False)
+    st.session_state.setdefault('delete_confirm_id', None)
+    # UI 상태 유지를 위한 세션 상태 추가
+    st.session_state.setdefault('selected_lottery_id', None)
 
     st.title("📜 NEW LOTTERY")
     st.markdown("---")
     col1, col2 = st.columns([2, 1])
 
-    # 좌측: 추첨 현황판 (UI 개선 버전)
     with col1:
         st.header("🎉 추첨 현황판")
         st.markdown("아래 목록에서 확인할 추첨을 선택하세요.")
@@ -127,24 +126,44 @@ def main():
 
         if df_lot.empty:
             st.info("아직 생성된 추첨이 없습니다.")
+            st.session_state.selected_lottery_id = None # 추첨이 없으면 선택도 초기화
         else:
-            # '게시판' 목록 생성을 위한 데이터 준비
             options_map = {}
             for index, row in df_lot.iterrows():
                 status_emoji = "🟢 진행중" if row['status'] == 'scheduled' else "🏁 완료"
                 option_label = f"{row['title']} | {status_emoji}"
                 options_map[option_label] = int(row['id'])
 
+            # =================== UI 상태 유지 로직 ===================
+            # 새로고침 후에도 선택이 유지되도록 인덱스를 계산
+            options_list = list(options_map.keys())
+            current_selection_id = st.session_state.selected_lottery_id
+            default_index = 0
+            if current_selection_id is not None:
+                # 현재 선택된 ID에 해당하는 새 레이블 찾기
+                for label, lid in options_map.items():
+                    if lid == current_selection_id:
+                        try:
+                            default_index = options_list.index(label)
+                        except ValueError: # 삭제된 경우
+                            default_index = 0
+                        break
+            # ========================================================
+            
             selected_option = st.radio(
-                "추첨 목록", options=options_map.keys(), key="lottery_selector", label_visibility="collapsed"
+                "추첨 목록", options=options_list, key="lottery_selector",
+                label_visibility="collapsed", index=default_index
             )
             
             if selected_option:
+                # 선택된 항목의 ID를 세션에 저장
                 selected_id = options_map[selected_option]
+                st.session_state.selected_lottery_id = selected_id
+                
                 sel = df_lot[df_lot['id'] == selected_id].iloc[0]
                 lid, title, status = int(sel['id']), sel['title'], sel['status']
                 
-                # =================== 안정적인 시간 처리 로직 복원 ===================
+                # 안정적인 시간 처리 로직 복원
                 raw = sel['draw_time']
                 if isinstance(raw, str):
                     draw_time = datetime.datetime.fromisoformat(raw)
@@ -152,7 +171,6 @@ def main():
                     draw_time = raw
                 if draw_time.tzinfo is None:
                     draw_time = draw_time.replace(tzinfo=KST)
-                # =================================================================
 
                 with st.container(border=True):
                     st.subheader(f"✨ {title}")
@@ -181,7 +199,7 @@ def main():
                         log_df = pd.read_sql("SELECT strftime('%Y-%m-%d %H:%M:%S', log_timestamp, 'localtime') AS 시간, log_message AS 내용 FROM lottery_logs WHERE lottery_id = ? ORDER BY id", conn, params=(lid,))
                         st.dataframe(log_df, use_container_width=True, height=200)
 
-    # 관리자 메뉴 (사용자 제공 코드와 100% 동일)
+    # 관리자 메뉴 (안전성 끝판왕 코드 유지)
     with col2:
         st.header("👑 추첨 관리자")
         if not st.session_state.admin_auth:
