@@ -119,14 +119,14 @@ def main():
     conn = setup_database()
     check_and_run_scheduled_draws(conn)
 
-    st.title("📜 모두가 함께 보는 투명한 추첨 시스템")
+    st.title("📜 NEW LOTTERY")
     st.markdown("---")
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.header("🎉 추첨 현황판")
-        st.markdown("이 페이지는 5초마다 자동으로 새로고침되어 최신 상태를 반영합니다.")
+        st.markdown("이 페이지는 최신 상태를 반영합니다.")
         
         try:
             lotteries_df = pd.read_sql("SELECT id, title, draw_time, status, num_winners FROM lotteries ORDER BY id DESC", conn)
@@ -176,7 +176,7 @@ def main():
                         st.dataframe(logs_df, use_container_width=True, height=150)
 
     with col2:
-        st.header("👑 관리자 메뉴")
+        st.header("👑 추첨 관리자 메뉴")
         if 'admin_auth' not in st.session_state:
             st.session_state['admin_auth'] = False
 
@@ -261,4 +261,5 @@ def main():
     conn.close()
 
 if __name__ == "__main__":
+
     main()
