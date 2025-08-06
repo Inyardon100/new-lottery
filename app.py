@@ -65,7 +65,6 @@ def add_log(conn, lottery_id, message):
     )
     conn.commit()
 
-
 def run_draw(conn, lottery_id, num_to_draw, candidates):
     actual = min(num_to_draw, len(candidates))
     if actual <= 0:
@@ -84,7 +83,6 @@ def run_draw(conn, lottery_id, num_to_draw, candidates):
     conn.commit()
     add_log(conn, lottery_id, f"{current_round}회차 추첨 진행. (당첨자: {', '.join(winners)})")
     return winners
-
 
 def check_and_run_scheduled_draws(conn):
     c = conn.cursor()
@@ -132,7 +130,7 @@ def main():
         else:
             for _, row in df_lot.iterrows():
                 lid, title, status = int(row['id']), row['title'], row['status']
-                draw_time = pd.to_datetime(row['draw_time']).tz_localize(KST)
+                draw_time = pd.to_datetime(row['draw_time']).tz_convert('Asia/Seoul')
                 with st.container():
                     st.subheader(f"✨ {title}")
                     winners_df = pd.read_sql(
@@ -184,27 +182,28 @@ def main():
                     st.error("코드가 올바르지 않습니다.")
         else:
             st.success("관리자로 인증됨")
-            action = st.radio("작업 선택", ["새 추첨", "기존 추첨 관리"], key="admin_action_radio")
+            action = st.radio("작업 선택", ["새 추첨 생성", "기존 추첨 관리"], key="admin_action_radio")
 
-            if action == "새 추첨":
+            if action == "새 추첨 생성":
                 st.subheader("새 추첨 만들기")
-                title = st.text_input("제목", key="new_title")
-                num_winners = st.number_input("당첨 인원", min_value=1, value=1, key="new_num_winners")
-                draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type"), key="new_draw_type")
+                title = st.text_input("추첨 제목", key="new_title")
+                num_winners = st.number_input("당첨 인원 수", min_value=1, value=1, key="new_num_winners")
+                draw_type = st.radio("추첨 방식", ["즉시 추첨", "예약 추첨"], key="new_draw_type")
 
-                if draw_type == "예약":
-                    date = st.date_input("날짜", value=now_kst().date(), key="new_draw_date")
-                    tm = st.time_input("시간", value=now_kst().time(), key="new_draw_time")
+                if draw_type == "예약 추첨":
+                    date = st.date_input("추첨 날짜 (YYYY-MM-DD 형식으로 선택)", value=now_kst().date(), key="new_draw_date")
+                    tm = st.time_input("추첨 시간 (HH:MM)", value=now_kst().time(), step=1, key="new_draw_time")
                     draw_time = datetime.datetime.combine(date, tm, tzinfo=KST)
                 else:
                     draw_time = now_kst()
 
-                participants_txt = st.text_area("참가자 (한 줄에 한 명)", key="new_participants")
-                if st.button("생성", key="create_button"):
+                st.markdown("참가자 명단을 입력하세요. 한 줄에 한 명씩 적어주세요.")
+                participants_txt = st.text_area("참가자 (예: 홍길동)\n홍길순", key="new_participants", height=150)
+                if st.button("추첨 생성", key="create_button"):
                     names = [n.strip() for n in participants_txt.split('\n') if n.strip()]
                     if not title or not names:
                         st.warning("제목과 참가자를 입력하세요.")
-                    elif draw_type == "예약" and draw_time <= now_kst():
+                    elif draw_type == "예약 추첨" and draw_time <= now_kst():
                         st.error("예약 시간은 현재 이후여야 합니다.")
                     else:
                         c = conn.cursor()
@@ -216,7 +215,7 @@ def main():
                         for n in names:
                             c.execute("INSERT INTO participants (lottery_id, name) VALUES (?, ?)", (lid, n))
                         conn.commit()
-                        add_log(conn, lid, f"생성 (방식: {draw_type}, 참가자: {len(names)})")
+                        add_log(conn, lid, f"추첨 생성 (방식: {draw_type}, 참가자 수: {len(names)})")
                         st.success("추첨 생성 완료")
                         time.sleep(1)
                         st.experimental_rerun()
@@ -227,7 +226,7 @@ def main():
                 if df_m.empty:
                     st.info("관리할 추첨이 없습니다.")
                 else:
-                    choice = st.selectbox("선택", df_m['title'], key="manage_choice")
+                    choice = st.selectbox("추첨 선택", df_m['title'], key="manage_choice")
                     sel = df_m[df_m['title']==choice].iloc[0]
                     lid = int(sel['id'])
                     # 재추첨
@@ -237,24 +236,23 @@ def main():
                         prev = pd.read_sql("SELECT winner_name FROM winners WHERE lottery_id=?", conn, params=(lid,))['winner_name'].tolist()
                         cand = [p for p in all_p if p not in prev]
                         if cand:
-                            chosen = st.multiselect("후보", cand, default=cand, key="redraw_candidates")
-                            num_r = st.number_input("추첨 인원", min_value=1, max_value=len(chosen), value=1, key="redraw_num_winners")
-                            if st.button("재추첨", key="redraw_button"):
+                            chosen = st.multiselect("재추첨 후보자", cand, default=cand, key="redraw_candidates")
+                            num_r = st.number_input("추첨 인원 수", min_value=1, max_value=len(chosen), value=1, key="redraw_num_winners")
+                            if st.button("재추첨 실행", key="redraw_button"):
                                 run_draw(conn, lid, num_r, chosen)
                                 st.success("재추첨 완료")
                                 time.sleep(1)
                                 st.experimental_rerun()
                         else:
-                            st.warning("후보 없음")
+                            st.warning("재추첨 후보가 없습니다.")
                     st.markdown("---")
                     # 삭제
                     if st.button("삭제", key="delete_button"):
                         st.session_state.delete_confirm_id = lid
-                    if st.session_state.delete_confirm_id==lid:
-                        st.warning("정말 삭제하시겠습니까?")
+                    if st.session_state.delete_confirm_id == lid:
+                        st.warning("정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")
                         if st.button("예, 삭제합니다", key="confirm_delete_button"):
                             c = conn.cursor()
-                            # 자식 테이블 데이터 먼저 삭제 (기존 외래키 제약이 작동하지 않을 수 있음)
                             c.execute("DELETE FROM lottery_logs WHERE lottery_id=?", (lid,))
                             c.execute("DELETE FROM winners WHERE lottery_id=?", (lid,))
                             c.execute("DELETE FROM participants WHERE lottery_id=?", (lid,))
