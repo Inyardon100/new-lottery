@@ -235,8 +235,6 @@ def main():
                     if st.session_state['delete_confirm_id']==lid:
                         st.warning(f"'{rec['title']}' 삭제하시겠습니까?")
                         if st.button("예, 삭제합니다", key=f"confirm_{lid}"):
-                            # 로그 먼저 남기고 삭제
-                            add_log(conn, lid, "추첨 삭제됨")
                             cur = conn.cursor()
                             cur.execute("DELETE FROM lotteries WHERE id=?",(lid,))
                             conn.commit()
